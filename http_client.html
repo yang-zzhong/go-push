@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SSE</title>
+    <style type="text/css" media="screen">
+      /* Add style here from the gist */
+    </style>
+  </head>
+  <body onload="onLoaded()">
+    <h1>Server Sent Events</h1>
+    <div id="main">
+      <h3 id="rand-container">Random Number</h3>
+      <div id="random-number"></div>
+    </div>
+    <script>
+      const onLoaded = () => {
+        let eventSource = new EventSource("/random");
+        eventSource.onmessage = (event) => {
+          document.getElementById("random-number").innerHTML = event.data;
+        };
+      };
+    </script>
+  </body>
+</html>
