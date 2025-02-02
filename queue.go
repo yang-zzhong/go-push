@@ -11,6 +11,8 @@ import (
 
 var (
 	ErrQueueNotFound = errors.New("queue not found")
+	queue            = make(map[string]*Queue)
+	queueLock        sync.RWMutex
 )
 
 type Storage interface {
@@ -25,6 +27,20 @@ type Queue struct {
 	autoCreate  bool
 	sublock     sync.RWMutex
 	subscribers map[string]chan struct{}
+}
+
+func GetQueue(name string, storage Storage, autoCreate bool) *Queue {
+	queueLock.RLock()
+	if q, ok := queue[name]; ok {
+		queueLock.RUnlock()
+		return q
+	}
+	queueLock.RUnlock()
+	q := NewQueue(name, storage, autoCreate)
+	queueLock.Lock()
+	defer queueLock.Unlock()
+	queue[name] = q
+	return q
 }
 
 func NewQueue(name string, storage Storage, autoCreate bool) *Queue {

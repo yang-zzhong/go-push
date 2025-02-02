@@ -11,15 +11,6 @@ type DBItem struct {
 	Offset    int64     `gorm:"column:offset;type:BIGINT;primarykey,auto_increment"`
 	Data      []byte    `gorm:"column:data;type:LONGTEXT"`
 	CreatedAt time.Time `gorm:"column:created_at;autoCreate"`
-	name      string
-}
-
-func (i DBItem) TableName() string {
-	return "q_" + i.name
-}
-
-func NewDBItem(name string) *DBItem {
-	return &DBItem{name: name}
 }
 
 type dbstorage struct {
@@ -36,21 +27,29 @@ func (q dbstorage) Add(ctx context.Context, name string, data [][]byte) error {
 	}
 	items := make([]*DBItem, len(data))
 	for i, bs := range data {
-		item := NewDBItem(name)
-		item.Data = bs
-		items[i] = item
+		items[i] = &DBItem{
+			Data: bs,
+		}
 	}
-	return q.DB.Create(items).Error
+	err := q.DB.Table("q_" + name).Create(items).Error
+	if err != nil && err.Error() == "no such table: q_"+name {
+		return ErrQueueNotFound
+	}
+	return err
 }
 
 func (q dbstorage) Create(ctx context.Context, name string) error {
-	return q.DB.AutoMigrate(NewDBItem(name))
+	return q.DB.Table("q_" + name).AutoMigrate(&DBItem{})
 }
 
 func (q dbstorage) Get(ctx context.Context, name string, offset, limit int64) ([][]byte, error) {
 	data := [][]byte{}
-	return data, q.DB.Model("q_"+name).
+	err := q.DB.Table("q_"+name).
 		Where("offset >= ?", offset).
 		Limit(int(limit)).
 		Order("offset asc").Pluck("data", &data).Error
+	if err != nil && err.Error() == "no such table: q_"+name {
+		return nil, ErrQueueNotFound
+	}
+	return data, err
 }

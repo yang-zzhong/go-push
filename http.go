@@ -3,13 +3,10 @@ package push
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 )
-
-// POST /create  {"name": string}
-// POST /push {"name": string, "item": any}
-// POST /get {"name": string}
-// POST /delete {"name": string}
 
 type httpBroker struct {
 	storage Storage
@@ -46,61 +43,94 @@ func NewHTTPHandler(s Storage) http.Handler {
 }
 
 func (b httpBroker) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	defer req.Body.Close()
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Method", "POST")
+	w.Header().Set("Access-Control-Allow-Headers", "*")
+	if req.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	switch req.URL.Path {
 	case "/subscribe":
 		b.subscribe(req, w)
+	case "/unsubscribe":
+		b.unsubscribe(w, req)
 	case "/push":
 		b.push(req, w)
 	}
 }
 
+func (b httpBroker) unsubscribe(w http.ResponseWriter, req *http.Request) {
+	var data struct {
+		Topic      string `json:"topic"`
+		Subscriber string `json:"subscriber"`
+	}
+	if err := b.readParams(req, &data); err != nil {
+		b.writeResp(req, w, message(codeInvalidParams, err.Error()))
+		return
+	}
+	q := GetQueue(data.Topic, b.storage, false)
+	q.Unsubscribe(data.Subscriber)
+	b.writeResp(req, w, message(codeOK, "ok"))
+}
+
 func (b httpBroker) push(req *http.Request, w http.ResponseWriter) {
-	contentType := req.Header.Get("Content-Type")
 	var body struct {
 		Topic      string   `json:"topic"`
-		Body       [][]byte `json:"body"`
+		Body       []string `json:"body"`
 		AutoCreate bool     `json:"auto_create"`
 	}
-	switch contentType {
-	case "application/json", "":
-		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-			b.writeJson(w, message(codeInvalidParams, err.Error()))
-			return
-		}
+	if err := b.readParams(req, &body); err != nil {
+		b.writeResp(req, w, message(codeInvalidParams, err.Error()))
+		return
 	}
-	q := NewQueue(body.Topic, b.storage, body.AutoCreate)
-	if err := q.Add(context.Background(), body.Body...); err != nil {
-		b.writeJson(w, message(codeServerError, err.Error()))
+	q := GetQueue(body.Topic, b.storage, body.AutoCreate)
+	data := make([][]byte, len(body.Body))
+	for i, d := range data {
+		data[i] = []byte(d)
+	}
+	if err := q.Add(context.Background(), data...); err != nil {
 		return
 	}
 	b.writeJson(w, message(codeOK, ""))
 }
 
-func (b httpBroker) subscribe(req *http.Request, w http.ResponseWriter) {
+func (b httpBroker) readParams(req *http.Request, data any) error {
 	contentType := req.Header.Get("Content-Type")
-	var body struct {
-		Topic      string `json:"topic"`
-		Subscriber string `json:"subscriber"`
-		Offset     int64  `json:"offset"`
-		Proto      string `json:"proto"`
-		AutoCreate bool   `json:"auto_create"`
-		BatchSize  int    `json:"batch_size"`
-	}
 	switch contentType {
 	case "application/json", "":
-		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-			b.writeJson(w, message(codeInvalidParams, err.Error()))
-			return
+		if err := json.NewDecoder(req.Body).Decode(data); err != nil {
+			return err
 		}
+	default:
+		return fmt.Errorf("unsupported content type [%s]", contentType)
 	}
-	q := NewQueue(body.Topic, b.storage, body.AutoCreate)
+	return nil
+}
+
+func (b httpBroker) writeResp(_ *http.Request, w http.ResponseWriter, resp Resp) {
+	b.writeJson(w, resp)
+}
+
+func (b httpBroker) subscribe(req *http.Request, w http.ResponseWriter) {
+	topic := req.FormValue("topic")
+	subscriber := req.FormValue("subscriber")
+	offsetStr := req.FormValue("offset")
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil {
+		b.writeJson(w, message(codeInvalidParams, err.Error()))
+		return
+	}
+	autoCreate := req.FormValue("auto_create")
+	q := GetQueue(topic, b.storage, autoCreate != "" && autoCreate != "0")
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Connection", "keep-alive")
 	q.Subscribe(
 		req.Context(),
-		body.Subscriber,
-		body.Offset,
-		body.BatchSize,
+		subscriber,
+		int64(offset),
+		20,
 		func(d [][]byte, startOffset int64) error {
 			bs, err := json.Marshal(struct {
 				Data        [][]byte `json:"data"`

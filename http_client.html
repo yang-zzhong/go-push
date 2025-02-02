@@ -14,12 +14,40 @@
     <div id="main">
       <h3 id="rand-container">Random Number</h3>
       <div id="random-number"></div>
+      <input id="channel" />
+      <input id="message" />
+      <button id="message-button">推送消息</button>
+      <div id="messages"></div>
     </div>
     <script>
       const onLoaded = () => {
-        let eventSource = new EventSource("/random");
-        eventSource.onmessage = (event) => {
-          document.getElementById("random-number").innerHTML = event.data;
+        let pushButton = document.querySelector("#message-button")
+        pushButton.addEventListener("click", function() {
+          let message = document.querySelector("#message").value;
+          let channel = document.querySelector("#channel").value;
+          let data = JSON.stringify({
+            "topic": channel,
+            "body": [message],
+            "auto_create": true,
+          });
+          fetch("http://127.0.0.1:8081/push", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: data,
+          });
+        })
+        let p = new URLSearchParams()
+        p.set("offset", 0)
+        p.set("subscriber", "s")
+        p.set("topic", "hello")
+        p.set("batch_size", 20)
+        p.set("proto", "json")
+        p.set("auto_create", 1)
+        let s = new EventSource("http://127.0.0.1:8081/subscribe?" + p.toString())
+        p.onmessage = function(e) {
+          console.log(e);
         };
       };
     </script>
