@@ -106,6 +106,11 @@ func (q *Queue) Subscribe(
 	if err := q.consume(ctx, &offset, batchSize, consume); err != nil {
 		return err
 	}
+	defer func() {
+		q.sublock.Lock()
+		delete(q.subscribers, name)
+		q.sublock.Unlock()
+	}()
 	for {
 		q.sublock.RLock()
 		ch, ok := q.subscribers[name]
@@ -113,11 +118,16 @@ func (q *Queue) Subscribe(
 		if !ok {
 			return nil
 		}
-		if _, ok := <-ch; !ok {
-			return nil
-		}
-		if err := q.consume(ctx, &offset, batchSize, consume); err != nil {
-			return err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case _, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			if err := q.consume(ctx, &offset, batchSize, consume); err != nil {
+				return err
+			}
 		}
 	}
 }

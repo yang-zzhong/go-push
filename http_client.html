@@ -46,7 +46,7 @@
         p.set("proto", "json")
         p.set("auto_create", 1)
         let s = new EventSource("http://127.0.0.1:8081/subscribe?" + p.toString())
-        p.onmessage = function(e) {
+        s.onmessage = function(e) {
           console.log(e);
         };
       };
