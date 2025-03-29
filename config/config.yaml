@@ -1,0 +1,6 @@
+listen: ":8081"
+logpath: "./push.log"
+loglevel: 0
+db:
+  dbms: sqlite
+  database: test.db

@@ -26,11 +26,10 @@
           let message = document.querySelector("#message").value;
           let channel = document.querySelector("#channel").value;
           let data = JSON.stringify({
-            "topic": channel,
             "body": [message],
             "auto_create": true,
           });
-          fetch("http://127.0.0.1:8081/push", {
+          fetch("http://127.0.0.1:8081/"+channel+"/push", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -41,11 +40,10 @@
         let p = new URLSearchParams()
         p.set("offset", 0)
         p.set("subscriber", "s")
-        p.set("topic", "hello")
         p.set("batch_size", 20)
         p.set("proto", "json")
         p.set("auto_create", 1)
-        let s = new EventSource("http://127.0.0.1:8081/subscribe?" + p.toString())
+        let s = new EventSource("http://127.0.0.1:8081/hello/subscribe?" + p.toString())
         s.onmessage = function(e) {
           console.log(e);
         };

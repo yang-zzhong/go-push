@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/dev-mockingbird/logf"
 )
@@ -25,6 +26,7 @@ type Resp struct {
 const (
 	codeInvalidParams = "invalid.params"
 	codeServerError   = "error.server"
+	codeNotFound      = "notfound"
 	codeOK            = "ok"
 )
 
@@ -48,33 +50,40 @@ func (b httpBroker) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	switch req.URL.Path {
-	case "/subscribe":
-		b.subscribe(req, w)
-	case "/unsubscribe":
-		b.unsubscribe(w, req)
-	case "/push":
-		b.push(req, w)
+	if len(req.URL.Path) == 0 {
+		b.writeResp(req, w, message(codeNotFound, "not found"))
+		return
+	}
+	ps := strings.Split(req.URL.Path[1:], "/")
+	if len(ps) < 2 {
+		b.writeResp(req, w, message(codeNotFound, "not found"))
+		return
+	}
+	switch ps[1] {
+	case "subscribe":
+		b.subscribe(ps[0], req, w)
+	case "unsubscribe":
+		b.unsubscribe(ps[0], w, req)
+	case "push":
+		b.push(ps[0], req, w)
 	}
 }
 
-func (b httpBroker) unsubscribe(w http.ResponseWriter, req *http.Request) {
+func (b httpBroker) unsubscribe(topic string, w http.ResponseWriter, req *http.Request) {
 	var data struct {
-		Topic      string `json:"topic"`
 		Subscriber string `json:"subscriber"`
 	}
 	if err := b.readParams(req, &data); err != nil {
 		b.writeResp(req, w, message(codeInvalidParams, err.Error()))
 		return
 	}
-	q := GetQueue(data.Topic, b.storage, false)
+	q := GetQueue(topic, b.storage, false)
 	q.Unsubscribe(data.Subscriber)
 	b.writeResp(req, w, message(codeOK, "ok"))
 }
 
-func (b httpBroker) push(req *http.Request, w http.ResponseWriter) {
+func (b httpBroker) push(topic string, req *http.Request, w http.ResponseWriter) {
 	var body struct {
-		Topic      string   `json:"topic"`
 		Body       []string `json:"body"`
 		AutoCreate bool     `json:"auto_create"`
 	}
@@ -82,7 +91,7 @@ func (b httpBroker) push(req *http.Request, w http.ResponseWriter) {
 		b.writeResp(req, w, message(codeInvalidParams, err.Error()))
 		return
 	}
-	q := GetQueue(body.Topic, b.storage, body.AutoCreate)
+	q := GetQueue(topic, b.storage, body.AutoCreate)
 	data := make([][]byte, len(body.Body))
 	for i, d := range body.Body {
 		data[i] = []byte(d)
@@ -111,13 +120,12 @@ func (b httpBroker) writeResp(_ *http.Request, w http.ResponseWriter, resp Resp)
 }
 
 func (b httpBroker) subscribeParams(req *http.Request) (
-	topic, subscriber string,
+	subscriber string,
 	offset int,
 	batchSize int,
 	autoCreate bool,
 	err error,
 ) {
-	topic = req.FormValue("topic")
 	subscriber = req.FormValue("subscriber")
 	offsetStr := req.FormValue("offset")
 	batchSizeStr := req.FormValue("batch_size")
@@ -139,17 +147,13 @@ func (b httpBroker) subscribeParams(req *http.Request) (
 		err = errors.New("subscriber should not be empty")
 		return
 	}
-	if topic == "" {
-		err = errors.New("topic should not be empty")
-		return
-	}
 	ac := req.FormValue("auto_create")
 	autoCreate = ac != "" && ac != "0"
 	return
 }
 
-func (b httpBroker) subscribe(req *http.Request, w http.ResponseWriter) {
-	topic, subscriber, offset, batchSize, autoCreate, err := b.subscribeParams(req)
+func (b httpBroker) subscribe(topic string, req *http.Request, w http.ResponseWriter) {
+	subscriber, offset, batchSize, autoCreate, err := b.subscribeParams(req)
 	if err != nil {
 		b.writeResp(req, w, message(codeInvalidParams, err.Error()))
 		return
