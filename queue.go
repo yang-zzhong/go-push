@@ -21,6 +21,11 @@ type Storage interface {
 	Create(ctx context.Context, name string) error
 }
 
+type ClientServerStorage interface {
+	Storage
+	OffsetStorage
+}
+
 type Queue struct {
 	name        string
 	storage     Storage

@@ -31,7 +31,7 @@ type dbstorage struct {
 	lock  sync.RWMutex
 }
 
-func NewDBStorage(db *gorm.DB) Storage {
+func NewDBStorage(db *gorm.DB) ClientServerStorage {
 	return &dbstorage{DB: db}
 }
 
