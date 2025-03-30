@@ -6,8 +6,8 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dev-mockingbird/events v0.2.2 h1:xBf+U1iZjjRzih7F+AaeExsOqmlWciY8c0whn0cKlmo=
 github.com/dev-mockingbird/events v0.2.2/go.mod h1:cNnMTbsn0q7lpqpKcdyn02mZP4VVINpcaz7vx80R2vs=
-github.com/dev-mockingbird/logf v0.1.0 h1:LYeZsSWwpdwPWVDbrZvPTgVN25V9Y2Pz8D1uYnx7R/M=
-github.com/dev-mockingbird/logf v0.1.0/go.mod h1:EQOQfMqHp/SqHCICJkvBotno5hNraqfQ0+VVFQ6rtQ0=
+github.com/dev-mockingbird/logf v0.1.1 h1:AF4uusmlebzl2bMs3jUG+qzodGlE3y58/ShSgH3JlQA=
+github.com/dev-mockingbird/logf v0.1.1/go.mod h1:EQOQfMqHp/SqHCICJkvBotno5hNraqfQ0+VVFQ6rtQ0=
 github.com/fatih/color v1.15.0 h1:kOqh6YHBtK8aywxGerMG2Eq3H6Qgoqeo13Bk2Mv/nBs=
 github.com/fatih/color v1.15.0/go.mod h1:0h5ZqXfHYED7Bhv2ZJamyIOUej9KtShiJESRwBDUSsw=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=

@@ -14,7 +14,7 @@ import (
 
 type httpBroker struct {
 	storage Storage
-	logger  logf.Logfer
+	logf.Logger
 }
 
 type Resp struct {
@@ -37,8 +37,8 @@ func message(code, message string) Resp {
 	}
 }
 
-func NewHTTPHandler(s Storage, logger logf.Logfer) http.Handler {
-	return httpBroker{storage: s, logger: logger}
+func NewHTTPHandler(s Storage, logger logf.Logger) http.Handler {
+	return httpBroker{storage: s, Logger: logger}
 }
 
 func (b httpBroker) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -59,44 +59,50 @@ func (b httpBroker) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		b.writeResp(req, w, message(codeNotFound, "not found"))
 		return
 	}
+	logger := b.Prefix(fmt.Sprintf("topic [%s]:", ps[0]))
 	switch ps[1] {
 	case "subscribe":
-		b.subscribe(ps[0], req, w)
+		b.subscribe(ps[0], req, w, logger)
 	case "unsubscribe":
-		b.unsubscribe(ps[0], w, req)
+		b.unsubscribe(ps[0], w, req, logger)
 	case "push":
-		b.push(ps[0], req, w)
+		b.push(ps[0], req, w, logger)
 	}
 }
 
-func (b httpBroker) unsubscribe(topic string, w http.ResponseWriter, req *http.Request) {
+func (b httpBroker) unsubscribe(topic string, w http.ResponseWriter, req *http.Request, logger logf.Logger) {
 	var data struct {
 		Subscriber string `json:"subscriber"`
 	}
 	if err := b.readParams(req, &data); err != nil {
+		logger.Logf(logf.Info, "unsubscribe: readParams: %s", err.Error())
 		b.writeResp(req, w, message(codeInvalidParams, err.Error()))
 		return
 	}
+	logger.Logf(logf.Info, "unsubscribe: %s", logf.JSON(data))
 	q := GetQueue(topic, b.storage, false)
 	q.Unsubscribe(data.Subscriber)
 	b.writeResp(req, w, message(codeOK, "ok"))
 }
 
-func (b httpBroker) push(topic string, req *http.Request, w http.ResponseWriter) {
+func (b httpBroker) push(topic string, req *http.Request, w http.ResponseWriter, logger logf.Logger) {
 	var body struct {
 		Body       []string `json:"body"`
 		AutoCreate bool     `json:"auto_create"`
 	}
 	if err := b.readParams(req, &body); err != nil {
+		logger.Logf(logf.Error, "pushing message: read message: %s", err.Error())
 		b.writeResp(req, w, message(codeInvalidParams, err.Error()))
 		return
 	}
+	logger.Logf(logf.Info, "pushing message: %s", logf.JSON(body))
 	q := GetQueue(topic, b.storage, body.AutoCreate)
 	data := make([][]byte, len(body.Body))
 	for i, d := range body.Body {
 		data[i] = []byte(d)
 	}
 	if err := q.Add(context.Background(), data...); err != nil {
+		logger.Logf(logf.Error, "pushing message: add message: %s", err.Error())
 		return
 	}
 	b.writeJson(w, message(codeOK, ""))
@@ -152,12 +158,18 @@ func (b httpBroker) subscribeParams(req *http.Request) (
 	return
 }
 
-func (b httpBroker) subscribe(topic string, req *http.Request, w http.ResponseWriter) {
+func (b httpBroker) subscribe(topic string, req *http.Request, w http.ResponseWriter, logger logf.Logger) {
 	subscriber, offset, batchSize, autoCreate, err := b.subscribeParams(req)
 	if err != nil {
+		logger.Logf(logf.Error, "subscribe: read params:  %s", err.Error())
 		b.writeResp(req, w, message(codeInvalidParams, err.Error()))
 		return
 	}
+	logger.Logf(
+		logf.Error,
+		"subscribe: subscriber [%s], offset [%d], batch size [%s], auto create [%v]",
+		subscriber, offset, batchSize, autoCreate,
+	)
 	q := GetQueue(topic, b.storage, autoCreate)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -184,21 +196,21 @@ func (b httpBroker) subscribe(topic string, req *http.Request, w http.ResponseWr
 				StartOffset: startOffset,
 			})
 			if err != nil {
-				b.logger.Logf(logf.Error, "marshal data: %s", err.Error())
+				logger.Logf(logf.Error, "subscribe: marshal data: %s", err.Error())
 				return nil
 			}
 			if _, err = w.Write(append(append([]byte("data:"), bs...), []byte("\n\n")...)); err != nil {
-				b.logger.Logf(logf.Error, "write data: %s", err.Error())
+				logger.Logf(logf.Error, "subscribe: write data: %s", err.Error())
 				return nil
 			}
 			if err := rc.Flush(); err != nil {
-				b.logger.Logf(logf.Error, "flush: %s", err.Error())
+				logger.Logf(logf.Error, "subscribe: flush: %s", err.Error())
 				return nil
 			}
 			return nil
 		})
 	if err != nil {
-		b.logger.Logf(logf.Error, "subscribe: %s", err.Error())
+		logger.Logf(logf.Error, "subscribe: %s", err.Error())
 	}
 }
 
@@ -206,11 +218,11 @@ func (b httpBroker) writeJson(w http.ResponseWriter, data Resp) {
 	w.Header().Set("Content-Type", "application/json")
 	bs, err := json.Marshal(data)
 	if err != nil {
-		b.logger.Logf(logf.Error, "marshal json: %s", err.Error())
+		b.Logf(logf.Error, "marshal json: %s", err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(bs); err != nil {
-		b.logger.Logf(logf.Error, "write json: %s", err.Error())
+		b.Logf(logf.Error, "write json: %s", err.Error())
 	}
 }
