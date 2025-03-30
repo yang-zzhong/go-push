@@ -36,7 +36,7 @@ func (c *HTTPClient) Subscribe(ctx context.Context, topic string, subscriber str
 	if err := c.OffsetStorage.GetOffset(ctx, topic, &offset); err != nil {
 		return err
 	}
-	u.Path = fmt.Sprintf("/subscribe/%s", topic)
+	u.Path = fmt.Sprintf("/%s/subscribe", topic)
 	q := u.Query()
 	q.Set("subscriber", subscriber)
 	q.Set("offset", fmt.Sprintf("%d", offset))
@@ -63,7 +63,7 @@ func (c *HTTPClient) Push(topic string, data [][]byte) error {
 	if err != nil {
 		return err
 	}
-	u.Path = fmt.Sprintf("/push/%s", topic)
+	u.Path = fmt.Sprintf("/%s/push", topic)
 	body := struct {
 		Body       []string `json:"body"`
 		AutoCreate bool     `json:"auto_create"`
